@@ -14,4 +14,4 @@ If you want to load the files localy within your own project, no problem, this i
 - export tables (sql/gz)
 - easy configurable
 
-Have fun with it. Find any bugs, please let me know or fix them en push the fix to github
+Have fun with it. Find any bugs, please let me know or fix them en push them fix to github
