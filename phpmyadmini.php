@@ -498,7 +498,7 @@ class database{
 				}
 				if(preg_match("/\sfrom\s([^]]*)\slimit\s/i",$q,$r)){
 					$org = $q;
-					$q = "SELECT COUNT(*) ".substr($r[0],0,-5);
+					$q = "SELECT COUNT(*) ".substr(trim($r[0]),0,-5);
 					$sth=self::$conn->prepare($q);
 					$sth->execute();
 
@@ -1034,7 +1034,7 @@ class HTML{
 			}
 			$html.='<div class="form-group"><label for="input_'.$f.'">'.$f.'</label>';
 			if($cm!='')
-				$html.='<i class="glyphicon glyphicon-info-sign small" title="'.$cm.'" data-toggle="tooltip"></i>';
+				$html.='&nbsp;<i class="glyphicon glyphicon-info-sign small" title="'.$cm.'" data-toggle="tooltip"></i>';
 			$html.='<span class="small text-muted pull-right"><i>'.$t.'</i></span>';
 			$html.='<div class="row">';
 			foreach($i as $inp){
