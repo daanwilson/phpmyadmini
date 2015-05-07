@@ -22,6 +22,11 @@ define("JQUERY","https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.
 define("BOOTSTRAP_CSS","https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css");
 define("BOOTSTRAP_JS","https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js");
 
+/* use this to autoconnet to database, when you use it in an other application.
+ * CAUTION!!!! 
+ * USE YOUR OWN PROTECTION, BECAUSE YOU WILL SET OPEN THE BACKDOOR!!! */
+//auth::autoConnect('root','','localhost'); 
+
 if(_G('phpinfo')=='true'){
 	phpinfo();
 	die;
@@ -437,6 +442,15 @@ class auth{
 		}
 		return self::$DB;
 	}
+	static function autoConnect($user,$pass,$host){
+		$_SESSION[APP_NAME]['db']=array();
+		$_SESSION[APP_NAME]['db']['user']=$user;
+		$_SESSION[APP_NAME]['db']['pass']=$pass;
+		$_SESSION[APP_NAME]['db']['host']=$host;
+		if(!(_R('xss'))){
+			$_REQUEST['xss'] = guard::get_xss();
+		}
+	}
 	static function connect($user,$pass,$host=null){
 		$host=($host!='' ? $host : DB_HOST);
 		self::$connected=self::DB()->connect($user,$pass,$host);
@@ -445,10 +459,7 @@ class auth{
 			guard::update_lock();
 			sleep(3); //small protection against brute force
 		}else{
-			$_SESSION[APP_NAME]['db']=array();
-			$_SESSION[APP_NAME]['db']['user']=$user;
-			$_SESSION[APP_NAME]['db']['pass']=$pass;
-			$_SESSION[APP_NAME]['db']['host']=$host;
+			self::autoConnect($user,$pass,$host);
 		}
 		return self::$connected;
 	}
