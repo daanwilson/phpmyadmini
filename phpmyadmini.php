@@ -23,8 +23,7 @@ define("BOOTSTRAP_CSS","https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/boot
 define("BOOTSTRAP_JS","https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js");
 
 /* use this to autoconnet to database, when you use it in an other application.
- * CAUTION!!!! 
- * USE YOUR OWN PROTECTION, BECAUSE YOU WILL SET OPEN THE BACKDOOR!!! */
+ * CAUTION!!!! USE YOUR OWN PROTECTION, BECAUSE YOU WILL OPEN THE FRONTDOOR!!! */
 //auth::autoConnect('root','','localhost'); 
 
 if(_G('phpinfo')=='true'){
@@ -134,6 +133,7 @@ if(guard::check_xss()){
 					<input type="text" name="host" id="inputHost" class="form-control" placeholder="Host" value="<?=(_P('host') ? _P('host') : DB_HOST);?>">
 					<br/>
 					<button class="btn btn-lg btn-primary btn-block" name="sign_in" value="true" type="submit">Sign in</button>
+					<hr/><small><?=APP_NAME;?> <?=APP_VERSION;?> by Daan Wilson</small>
 				</form>
 			</div>
 			<?php
@@ -424,7 +424,7 @@ class lnk{
 		return self::database()."&table=".($t==null ? DB()->getTable() : $t);
 	}
 	static function record($id=null){
-		return self::table()."&record=".($id==null ? DB()->getRecordID() : $id);
+		return self::table()."&record=".urlencode($id==null ? DB()->getRecordID() : $id);
 	}
 }
 /**
@@ -551,12 +551,12 @@ class database{
 	function describeTable($table=null){
 		$table=($table=='' ? $this->getTable() : $table);
 		$t=$this->query("SHOW FULL COLUMNS FROM `".$table."`");
-		$pk=false;
+		$pk=array();
 		$idx=array();
 		$cmts=array();
 		foreach((array)$t as $kol){
 			if($kol['Key']=='PRI'){
-				$pk=$kol['Field'];
+				$pk[]=$kol['Field'];
 			}elseif($kol['Key']=='MUL'){
 				$idx[]=$kol['Field'];
 			}
@@ -566,20 +566,43 @@ class database{
 		}
 		return array("tname"=>$table,"t"=>$t,'pk'=>$pk,'indexes'=>$idx,'comments'=>$cmts);
 	}
+	function getPkLink($pk,$record){
+		if(is_array($pk)){
+			$pk_link = array();
+			foreach($pk as $k){
+				if(key_exists($k,$record)){
+					$pk_link[$k]=$record[$k];
+				}else{
+					return false;
+				}
+			}
+			return serialize($pk_link);
+		}
+		return false;
+	}
+	function getPkWhere($pk,$record){
+		$record = unserialize($record);
+		$where = array();
+		foreach($pk as $k){
+			$where[] = "`".$k."`='".esc($record[$k])."'";
+		}
+		return implode(" AND ",$where);
+		
+	}
 	function saveRecord(){
-		if(_P('save_record')and$this->getTable()!=''){
+		if(_P('save_record') && $this->getTable()!=''){
 
 			$t=$this->describeTable();
 			foreach($t['t'] as $kol){
 				$k=$kol['Field'];
-				if($k==$t['pk'])
+				if(in_array($k,$t['pk']) and count($t['pk'])==1)
 					continue;
 
 				$v=_P($k);
 				$fields[]="`".$k."`='".esc($v)."'";
 			}
 			if(_R('record')!=''){
-				$query='UPDATE `'.$t['tname'].'` SET '.implode(", ",$fields)." WHERE `".$t['pk']."`='".esc(_R('record'))."'";
+				$query='UPDATE `'.$t['tname'].'` SET '.implode(", ",$fields)." WHERE ".$this->getPkWhere($t['pk'],_R('record'));
 				db()->query($query);
 			}else{
 				$query='INSERT INTO `'.$t['tname'].'` SET '.implode(", ",$fields);
@@ -592,7 +615,7 @@ class database{
 	function removeRecord(){
 		if(_P('remove_record') && $this->getTable()!='' && _R('record')!=''){
 			$t=$this->describeTable();
-			$query="DELETE FROM `".$t['tname']."`  WHERE `".$t['pk']."`='".esc(_R('record'))."'";
+			$query="DELETE FROM `".$t['tname']."`  WHERE ".$this->getPkWhere($t['pk'],_R('record'));
 			db()->query($query);
 			$_REQUEST['record']=$_POST['record']=$_GET['record']=false;
 			msg::error("Query executed : ".$query);
@@ -906,6 +929,7 @@ class HTML{
 			$html.='<div class="col-md-6 text-right">'.self::getSearchInput($query).'</div>';
 			$html.='</div>';
 		}
+		$pk_link = false;
 		if(is_array($records) && count($records)>0){
 			$html.= '<div class="table-responsive"><table class="table table-hover table-striped table-condensed">';
 			$html.= '<thead><tr>';
@@ -913,7 +937,7 @@ class HTML{
 				$html.= '<th title="'.$kol.'"><div class="ellipsis">';
 				if(_G('exec')=='' && _G('m')==''){
 					$html.='<a href="javascript:setOrderBy(\'`'.$kol.'`\')">'.$kol.'</a>';
-					if(isset($pk)and$pk==$kol){
+					if(isset($pk) && is_array($pk) and in_array($kol,$pk)){
 						$html.='<span class="glyphicon glyphicon-star" title="Primary key"></span>';
 					}elseif(isset($idx) && is_array($idx) && in_array($kol,$idx)){
 						$html.='<span class="glyphicon glyphicon-flash" title="Index"></span>';
@@ -930,12 +954,13 @@ class HTML{
 			$html.= '<tbody>';
 			foreach($records as $record){
 				$html.='<tr>';
+				$pk_link = db()->getPkLink($pk,$record);
 				foreach($record as $kol=> $value){
 					$v=hs($value);
-					if(_R('exec')=='SHOW CREATE TABLE'and$kol=='Create Table'){
+					if(_R('exec')=='SHOW CREATE TABLE' && $kol=='Create Table'){
 						$v='<pre>'.$v.'</pre>';
-					}elseif(isset($pk)and$kol==$pk){
-						$v='<a href="'.lnk::table().'&record='.$record[$pk].'" title="'.$v.'">'.$v.'</a>';
+					}elseif(isset($pk) && is_array($pk) && in_array($kol,$pk) && $pk_link!=false){
+						$v='<a href="'.lnk::table().'&record='.urlencode($pk_link).'" title="'.$v.'">'.$v.'</a>';
 					}else{
 						$v='<span title="'.$v.'" class="ellipsis">'.$v.'</span>';
 					}
@@ -948,7 +973,7 @@ class HTML{
 		}else{
 			$html.= '<div class="alert alert-warning">No records found</div>';
 		}
-		if(isset($pk)and$pk!=''){
+		if(isset($pk) && is_array($pk) && $pk_link!=false){
 			$html.= '<a class="btn btn-primary" href="'.lnk::record().'">New record</a></div></div></div>';
 		}
 		return $html;
@@ -976,7 +1001,10 @@ class HTML{
 			$html.='<li class="'.($c<($pages-1) ? '' : 'disabled').'"><a href="#" data-page="'.($c<($pages-1) ? ($c+1) : $c).'">&raquo;</a></li>';
 			$html.='</ul>';
 		}
-		$html.='<div class="small text-muted"><i>Record '.number_format((($c*Pagination::$limit)+1)).' - '.number_format(($c+1)*Pagination::$limit).' of '.number_format(Pagination::$tcount,0).' records</i></div>';
+		$f = min((($c*Pagination::$limit)+1),Pagination::$tcount);
+		$t = min(($c+1)*Pagination::$limit,Pagination::$tcount);
+		$tot = Pagination::$tcount;
+		$html.='<div class="small text-muted"><i>Record '.number_format($f).' - '.number_format($t).' of '.number_format($tot).' records</i></div>';
 		return $html;
 	}
 	static function getSearchInput($query){
@@ -1007,26 +1035,26 @@ class HTML{
 		$t=db()->describeTable();
 		$record=array();
 		if(isset($t['pk']) && _R('record')!=''){
-			$record=db()->query("SELECT * FROM `".$t['tname']."` WHERE `".$t['pk']."`='".esc(_R('record'))."' LIMIT 1");
+			$record=db()->query("SELECT * FROM `".$t['tname']."` WHERE ".db()->getPkWhere($t['pk'],_R('record'))." LIMIT 1");
 			$record=(array)$record[0];
 		}
 
 		$html='<form method="POST" action="'.lnk::record().'">';
 		foreach($t['t'] as $kol){
-			$t=$kol['Type'];
+			$type=$kol['Type'];
 			$f=$kol['Field'];
 			$k=$kol['Key'];
 			$cm=$kol['Comment'];
 			$v=@$record[$f];
 			$i=array(0=>array('t'=>'text','n'=>$f,'v'=>$v,'c'=>'col-md-12'));
-			if($k=='PRI'){
+			if($k=='PRI' && count($t['pk'])==1){
 				$i[0]['t']='pk';
-			}elseif(stristr($t,'text')!==false){
+			}elseif(stristr($type,'text')!==false){
 				$i[0]['t']="textarea";
-			}elseif(stristr($t,'varchar')!==false && (int)btwn_brackets($t)>100){
+			}elseif(stristr($type,'varchar')!==false && (int)btwn_brackets($type)>100){
 				$i[0]['t']="textarea";
-			}elseif(stristr($t,'enum')!==false){
-				$opts=explode(",",btwn_brackets($t));
+			}elseif(stristr($type,'enum')!==false){
+				$opts=explode(",",btwn_brackets($type));
 				$opts=array_map(function($x){
 					return trim($x,"'");
 				},$opts);
