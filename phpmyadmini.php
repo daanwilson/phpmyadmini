@@ -764,6 +764,7 @@ class HTML{
 	static function getAbout(){
 		$html='<div class="well">';
 		$html.= '<div>Developed by : Daan Wilson</div>';
+		$html.= '<div>Licence : <a href="'.(is_file('LICENSE')?'LICENSE':'http://en.wikipedia.org/wiki/MIT_License').'" target="_blank">MIT licence</a></div>';
 		$html.= '<div>Application name : '.APP_NAME.'</div>';
 		$html.= '<div>Application version : '.APP_VERSION.'</div>';
 		$html.= '<div>Application last update : '.APP_VERSION_RELEASE_DATE.'</div>';
@@ -1074,7 +1075,7 @@ class HTML{
 			$html.='<div class="form-group"><label for="input_'.$f.'">'.$f.'</label>';
 			if($cm!='')
 				$html.='&nbsp;<i class="glyphicon glyphicon-info-sign small" title="'.$cm.'" data-toggle="tooltip"></i>';
-			$html.='<span class="small text-muted pull-right"><i>'.$t.'</i></span>';
+			$html.='<span class="small text-muted pull-right"><i>'.$type.'</i></span>';
 			$html.='<div class="row">';
 			foreach($i as $inp){
 				$html.='<div class="'.$inp['c'].'">';
