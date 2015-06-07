@@ -14,7 +14,7 @@ define("MAX_ROWS_PER_PAGE",50);//default record limit
 
 define("APP_NAME","phpMyAdmini");
 define("APP_VERSION","1.0");
-define("APP_VERSION_RELEASE_DATE","2015-05-02");
+define("APP_VERSION_RELEASE_DATE","2015-06-07");
 define("INLOG_LOCK_FILE",sys_get_temp_dir()."/".md5(APP_NAME).'.lock');//inlog lock file for max attemptions
 
 /** Set external client files locations * */
@@ -69,7 +69,7 @@ if(guard::check_xss()){
 				foreach($tables as $t){
 					q()->add(sprintf('%s `%s`',_R('exec'),$t));
 				}
-				if(_R('exec')=="DROP" || _R('exec')=='TRUNCATE'){
+				if(_R('exec')=="DROP TABLE" || _R('exec')=='TRUNCATE'){
 					q()->setConfirm();
 				}
 			}
@@ -727,6 +727,9 @@ class HTML{
 			if(!q()->getConfirm()){
 				foreach(q()->get() as $q){
 					$content.= '<div class="row"><div class="col-md-12">'.self::getTableData($q).'</div></div>';
+					if(preg_match('/^drop table/i',$q)){
+						header('Location: '.lnk::database());die;
+					}
 				}
 			}
 		}elseif(_P('exec')=="EXPORT" && is_array(_P('tables'))){
@@ -799,7 +802,7 @@ class HTML{
 		$actions["OPTIMIZE TABLE"]="Optimize table(s)";
 		$actions["REPAIR TABLE"]="Repair table(s)";
 		$actions["TRUNCATE"]="TRUNCATE table(s)";
-		$actions["DROP"]="DROP table(s)";
+		$actions["DROP TABLE"]="DROP table(s)";
 		$html='<select name="exec" onchange="form.submit();" class="form-control input-sm">';
 		foreach($actions as $a=> $d){
 			$html.='<option value="'.$a.'">'.$d.'</option>';
@@ -955,7 +958,7 @@ class HTML{
 			$html.= '<tbody>';
 			foreach($records as $record){
 				$html.='<tr>';
-				$pk_link = db()->getPkLink($pk,$record);
+				$pk_link = (isset($pk)?db()->getPkLink($pk,$record):false);
 				foreach($record as $kol=> $value){
 					$v=hs($value);
 					if(_R('exec')=='SHOW CREATE TABLE' && $kol=='Create Table'){
