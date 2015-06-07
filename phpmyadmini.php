@@ -8,41 +8,39 @@ date_default_timezone_set(date_default_timezone_get());//Europe/Amsterdam
 /** Set charset * */
 define("CHARSET","utf-8");
 define("DB_CHARSET","utf8");
-define("DB_DATABASE","");//fill in the database if you want to force the user to this database.
-define("DB_HOST","localhost");//default host.
-define("MAX_ROWS_PER_PAGE",50);//default record limit
+define("DB_DATABASE","");		//fill in the database if you want to force to use this database.
+define("DB_HOST","localhost");	//default host.
+define("MAX_ROWS_PER_PAGE",50);	//default record limit
 
 define("APP_NAME","phpMyAdmini");
 define("APP_VERSION","1.0");
-define("APP_VERSION_RELEASE_DATE","2015-06-07");
-define("INLOG_LOCK_FILE",sys_get_temp_dir()."/".md5(APP_NAME).'.lock');//inlog lock file for max attemptions
+define("APP_VERSION_RD","2015-06-07");
+define("INLOG_LOCK_FILE",sys_get_temp_dir()."/".md5(APP_NAME).'.lock');	//For max inlog attemptions
 
 /** Set external client files locations * */
 define("JQUERY","https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js");
 define("BOOTSTRAP_CSS","https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css");
 define("BOOTSTRAP_JS","https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js");
 
-/* use this to autoconnet to database, when you use it in an other application.
- * CAUTION!!!! USE YOUR OWN PROTECTION, BECAUSE YOU WILL OPEN THE FRONTDOOR!!! */
+/* CAUTION!!!! USE YOUR OWN PROTECTION, BECAUSE YOU WILL OPEN THE FRONTDOOR!!! */
 //auth::autoConnect('root','','localhost'); 
 
 if(_G('phpinfo')=='true'){
 	phpinfo();
 	die;
 }
-if(_G('logout')){
-	auth::disconnect();
-}
 if(get_magic_quotes_gpc()){
 	$_GET=killmq($_GET);
 	$_POST=killmq($_POST);
 	$_REQUEST=killmq($_REQUEST);
 }
-if(guard::check_xss()){
+if(!guard::check_xss()){
+	auth::disconnect();
+}else{
 	if(_P('sign_in') && _P('username') && guard::check_lock()){
 		if(!auth::connect(_P('username'),_P('password'),_P('host'))){
 			guard::update_lock();
-		};
+		}
 	}
 	if(auth::check()){
 		if(_G('m')=='process'){
@@ -166,7 +164,7 @@ if(guard::check_xss()){
 							<li class="<?=(_G('a')=='about' ? 'active' : '');?>"><a href="<?=lnk::database();?>&a=about">About</a></li>								
 						</ul>
 						<ul class="nav navbar-nav navbar-right">
-							<li><a href="<?=lnk::link()."?logout=true";?>" title="Logout">Welcome <strong><?=auth::get_user();?></strong>&nbsp;<span class="glyphicon glyphicon-log-out"></span></a></li> 
+							<li><a href="<?=$_SERVER['PHP_SELF'];?>" title="Logout">Welcome <strong><?=auth::get_user();?></strong>&nbsp;<span class="glyphicon glyphicon-log-out"></span></a></li> 
 						</ul>
 					</div><!--/.nav-collapse -->
 				</div>
@@ -362,22 +360,30 @@ class msg{
 	}
 }
 class guard{
+	protected static $xss;
 	/**
 	 * Generate a random xss string
 	 * @return string
 	 */
 	static function get_xss(){
-		if(!isset($_SESSION[APP_NAME]['xss'])){
-			$_SESSION[APP_NAME]['xss']=substr(str_shuffle(md5(time())),0,16);
+		if(self::$xss===null){
+			self::$xss = substr(str_shuffle(md5(time())),0,16);
+			$_SESSION[APP_NAME]['xss'] = self::$xss;
 		}
-		return $_SESSION[APP_NAME]['xss'];
+		return self::$xss;
+	}
+	static function last_xss(){
+		return (isset($_SESSION[APP_NAME]['xss'])?$_SESSION[APP_NAME]['xss']:false);
+	}
+	static function refreshed(){
+		return (isset($_SERVER['HTTP_CACHE_CONTROL']) && $_SERVER['HTTP_CACHE_CONTROL'] === 'max-age=0');
 	}
 	/**
 	 * Check if de present xss value match the known value
 	 * @return boolean
 	 */
 	static function check_xss(){
-		if(_R('xss')!=false && self::get_xss()==_R('xss')){
+		if(_R('xss')!=false && (self::last_xss()==_R('xss') || self::refreshed())){
 			return true;
 		}
 		return false;
@@ -465,6 +471,7 @@ class auth{
 	}
 	static function disconnect(){
 		$_SESSION[APP_NAME]=array();
+		session_regenerate_id(true);
 		self::$connected=false;
 	}
 	static function check(){
@@ -591,7 +598,6 @@ class database{
 	}
 	function saveRecord(){
 		if(_P('save_record') && $this->getTable()!=''){
-
 			$t=$this->describeTable();
 			foreach($t['t'] as $kol){
 				$k=$kol['Field'];
@@ -627,14 +633,14 @@ class query{
 	protected static $cfrm=false;
 	function getConfirm(){
 		if(self::$cfrm && !empty(self::$q)){
-			$string='Are you sure to run the next queries ?<br/>';
-			$string.= trim(implode(";<br/>",self::$q),';').';';
-			$string.= '<form method="post" action="'.lnk::table().'">';
-			$string.= '<input type="hidden" name="query" value="'.implode(";<br/>",self::$q).'">';
-			$string.= '<a class="btn btn-default btn-sm" href="'.$_SERVER['HTTP_REFERER'].'">NO</a>&nbsp;';
-			$string.= '<button class="btn btn-primary btn-sm" name="exec" value="'._P('exec').'">YES</button>';
-			$string.= '</form>';
-			msg::error($string);
+			$s='Are you sure to run the next queries ?<br/>';
+			$s.= trim(implode(";<br/>",self::$q),';').';';
+			$s.= '<form method="post" action="'.lnk::table().'">';
+			$s.= '<input type="hidden" name="query" value="'.implode(";<br/>",self::$q).'">';
+			$s.= '<a class="btn btn-default btn-sm" href="'.$_SERVER['HTTP_REFERER'].'">NO</a>&nbsp;';
+			$s.= '<button class="btn btn-primary btn-sm" name="exec" value="'._P('exec').'">YES</button>';
+			$s.= '</form>';
+			msg::error($s);
 		}
 		return self::$cfrm;
 	}
@@ -770,7 +776,7 @@ class HTML{
 		$html.= '<div>Licence : <a href="'.(is_file('LICENSE')?'LICENSE':'http://en.wikipedia.org/wiki/MIT_License').'" target="_blank">MIT licence</a></div>';
 		$html.= '<div>Application name : '.APP_NAME.'</div>';
 		$html.= '<div>Application version : '.APP_VERSION.'</div>';
-		$html.= '<div>Application last update : '.APP_VERSION_RELEASE_DATE.'</div>';
+		$html.= '<div>Application last update : '.APP_VERSION_RD.'</div>';
 		$html.= '<hr/>';
 		$html.= '<div>Your MySQL version: '.db()->getVersion().'</div>';
 		$html.= '<div>Your PHP version: '.phpversion().'</div>';
@@ -1345,14 +1351,14 @@ function db(){
 function q(){
 	return new query();
 }
-function killmq($value){
-	return is_array($value) ? array_map('killmq',$value) : stripslashes($value);
+function killmq($val){
+	return is_array($val) ? array_map('killmq',$val) : stripslashes($val);
 }
-function fBytes($size,$precision=2){
+function fBytes($size,$prec=2){
 	if($size>0){
-		$base=log($size,1024);
-		$suffixes=array('b','kb','Mb','Gb','Tb');
-		return round(pow(1024,$base-floor($base)),$precision).$suffixes[floor($base)];
+		$b=log($size,1024);
+		$s=array('b','kb','Mb','Gb','Tb');
+		return round(pow(1024,$b-floor($b)),$prec).$s[floor($b)];
 	}
 	return $size;
 }
@@ -1362,34 +1368,34 @@ function hs($s){
 function esc($s){
 	return addslashes($s);
 }
-function btwn_brackets($string){
-	return (preg_match("/\(([^]]*)\)/i",$string,$r) ? $r[1] : false);
+function btwn_brackets($str){
+	return (preg_match("/\(([^]]*)\)/i",$str,$r) ? $r[1] : false);
 }
 function extract_query($q){
-	$result = array();
+	$r = array();
 	$parts=array_reverse(array('where','group by','order by','limit','having'));
 	foreach($parts as $part){
-		$result[$part]=null;
+		$r[$part]=null;
 		$p=strripos($q,$part.' ');
 		if($p!==false){
-			$result[$part]=trim(substr($q,$p));
+			$r[$part]=trim(substr($q,$p));
 			$q=rtrim(substr($q,0,$p));
 		}
 	}
-	$result['base'] = $q;
-	return array_reverse($result);
-}
-function get_limit($string){
-	$limit = array(0=>0,1=>MAX_ROWS_PER_PAGE);
-	if($string!='' && preg_match_all('/\d+/',$string,$matches)){
-		if(count($matches[0])>1){
-			$limit=$matches[0];
-		}else{
-			$limit[1]=$matches[0][0];
-		}
-	}
-	return $limit;
+	$r['base'] = $q;
+	return array_reverse($r);
 }
 function build_query($parts){
 	return implode(" ",array_map("trim",array_filter($parts)));
+}
+function get_limit($str){
+	$l = array(0=>0,1=>MAX_ROWS_PER_PAGE);//limit
+	if($str!='' && preg_match_all('/\d+/',$str,$m)){
+		if(count($m[0])>1){
+			$l=$m[0];
+		}else{
+			$l[1]=$m[0][0];
+		}
+	}
+	return $l;
 }
