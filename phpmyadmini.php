@@ -490,7 +490,7 @@ class auth{
 class database{
 	static $conn;
 	protected $totCount;
-	function connect($user,$pass,$host){
+	function connect($user=null,$pass=null,$host=null){
 		if(self::$conn===null){
 			try{
 				$db=(DB()->getDB() ? 'dbname='.DB()->getDB().';' : '');
